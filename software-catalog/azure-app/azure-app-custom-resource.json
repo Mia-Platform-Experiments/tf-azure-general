@@ -74,12 +74,7 @@
         "default": "Node.js 18 LTS",
         "enum": [
           "Node.js 18 LTS",
-          "Node.js 20 LTS",
-          "Python 3.11",
-          "Python 3.12",
-          "Java 17",
-          "Java 21",
-          ".NET 8"
+          "Python 3.10"
         ]
       }
     }
