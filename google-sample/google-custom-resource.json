@@ -1,0 +1,154 @@
+{
+  "generator": {
+    "configurationBaseFolder": "googlecloud",
+    "templates": [
+      {
+        "name": "main",
+        "fileExtension": "tf",
+        "folderName": "functions",
+        "template": "# Configure Terraform and required providers\nterraform {\n  required_version = \">= 1.0\"\n  required_providers {\n    google = {\n      source  = \"hashicorp/google\"\n      version = \"~> 5.0\"\n    }\n  }\n\n  # Backend configuration for GitLab managed state\n  backend \"http\" {\n    lock_method    = \"POST\"\n    unlock_method  = \"DELETE\"\n    retry_wait_min = 5\n  }\n}\n\n# Configure the Google Cloud provider\nprovider \"google\" {\n  project = var.project_id\n  region  = var.region\n}\n\n# ----------------------------------------------------\n# 1. Cloud Function (2nd Gen) Resource\n# ----------------------------------------------------\n# Uses source-based deployment from Cloud Storage bucket\nresource \"google_cloudfunctions2_function\" \"hello_world_function\" {\n  name     = var.function_name\n  project  = var.project_id\n  location = var.region\n\n  # Build configuration for source-based deployment\n  build_config {\n    runtime     = var.runtime\n    entry_point = var.entry_point\n\n    source {\n      storage_source {\n        bucket = var.source_bucket\n        object = var.source_archive_object\n      }\n    }\n  }\n\n  # Service configuration\n  service_config {\n    # Set the service account email\n    service_account_email = var.runtime_service_account\n\n    # Memory and concurrency settings\n    available_memory                 = var.available_memory\n    max_instance_count               = var.max_instance_count\n    max_instance_request_concurrency = var.max_instance_request_concurrency\n    timeout_seconds                  = var.timeout_seconds\n  }\n}\n\n# ----------------------------------------------------\n# 2. IAM Policy for domain-based access\n# ----------------------------------------------------\n# Grants 'domain:mia-platform.eu' the permission to invoke the function\nresource \"google_cloud_run_service_iam_member\" \"domain_access\" {\n  project  = google_cloudfunctions2_function.hello_world_function.project\n  location = google_cloudfunctions2_function.hello_world_function.location\n  service  = google_cloudfunctions2_function.hello_world_function.name\n\n  role   = \"roles/run.invoker\"\n  member = \"domain:mia-platform.eu\"\n}\n\n# ----------------------------------------------------\n# 3. Output the deployed URL\n# ----------------------------------------------------\noutput \"function_url\" {\n  description = \"The URL of the deployed Cloud Function (2nd Gen).\"\n  value       = google_cloudfunctions2_function.hello_world_function.url\n}\n"
+      },
+      {
+        "name": "variables",
+        "fileExtension": "tf",
+        "folderName": "functions",
+        "template": "variable \"project_id\" {\n  description = \"The GCP project ID.\"\n  type        = string\n}\n\nvariable \"region\" {\n  description = \"The GCP region for the function.\"\n  type        = string\n}\n\nvariable \"function_name\" {\n  description = \"The name for the Cloud Function.\"\n  type        = string\n  default     = \"%spec.function_name%\"\n}\n\nvariable \"source_bucket\" {\n  description = \"The Cloud Storage bucket containing the function source archive.\"\n  type        = string\n}\n\nvariable \"source_archive_object\" {\n  description = \"The Cloud Storage object path to the function source archive.\"\n  type        = string\n}\n\nvariable \"runtime\" {\n  description = \"The runtime for the Cloud Function.\"\n  type        = string\n  default     = \"%spec.runtime%\"\n}\n\nvariable \"entry_point\" {\n  description = \"The entry point function name.\"\n  type        = string\n  default     = \"%spec.entry_point%\"\n}\n\nvariable \"runtime_service_account\" {\n  description = \"The email of the service account the function will run as.\"\n  type        = string\n}\n\nvariable \"available_memory\" {\n  description = \"The amount of memory available for the function.\"\n  type        = string\n  default     = \"%spec.available_memory%\"\n}\n\nvariable \"max_instance_count\" {\n  description = \"The maximum number of instances for the function.\"\n  type        = number\n  default     = %spec.max_instance_count%\n}\n\nvariable \"max_instance_request_concurrency\" {\n  description = \"The maximum number of concurrent requests per instance.\"\n  type        = number\n  default     = %spec.max_instance_request_concurrency%\n}\n\nvariable \"timeout_seconds\" {\n  description = \"The function timeout in seconds.\"\n  type        = number\n  default     = %spec.timeout_seconds%\n}\n\nvariable \"environment_variables\" {\n  description = \"Environment variables for the function.\"\n  type        = map(string)\n  default     = {}\n}"
+      }
+    ],
+    "type": "template"
+  },
+  "meta": {
+    "apiVersion": "custom-generator.console.mia-platform.eu/v1",
+    "kind": "GoogleFunctionTemplateGenerator"
+  },
+  "name": "my-google-function",
+  "jsonSchema": {
+    "type": "object",
+    "required": [
+      "function_name",
+      "runtime",
+      "entry_point"
+    ],
+    "properties": {
+      "function_name": {
+        "type": "string",
+        "description": "The name for the Cloud Function.",
+        "default": "hello-world-function",
+        "examples": [
+          "hello-world-function"
+        ]
+      },
+      "runtime": {
+        "type": "string",
+        "description": "The runtime for the Cloud Function.",
+        "default": "python311",
+        "enum": [
+          "nodejs20",
+          "python312",
+          "python311",
+          "go122",
+          "java17",
+          "ruby32",
+          "php82",
+          "dotnet8"
+        ]
+      },
+      "entry_point": {
+        "type": "string",
+        "description": "The entry point function name.",
+        "default": "hello_world",
+        "examples": [
+          "hello_world"
+        ]
+      },
+      "available_memory": {
+        "type": "string",
+        "description": "The amount of memory available for the function.",
+        "default": "256Mi",
+        "enum": [
+          "64Mi",
+          "128Mi",
+          "256Mi",
+          "512Mi",
+          "1024Mi"
+        ]
+      },
+      "max_instance_count": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 5,
+        "description": "The maximum number of instances for the function.",
+        "default": 5,
+        "examples": [
+          5
+        ]
+      },
+      "max_instance_request_concurrency": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 100,
+        "description": "The maximum number of concurrent requests per instance.",
+        "default": 1,
+        "examples": [
+          1
+        ]
+      },
+      "timeout_seconds": {
+        "type": "number",
+        "minimum": 1,
+        "maximum": 300,
+        "description": "The function timeout in seconds.",
+        "default": 60,
+        "examples": [
+          60
+        ]
+      }
+    }
+  },
+  "spec": {
+    "variables": [
+      {
+        "name": "function_name",
+        "description": "The name for the Cloud Function.",
+        "type": "string",
+        "default": "hello-world-function"
+      },
+      {
+        "name": "runtime",
+        "description": "The runtime for the Cloud Function.",
+        "type": "string",
+        "default": "python311"
+      },
+      {
+        "name": "entry_point",
+        "description": "The entry point function name.",
+        "type": "string",
+        "default": "hello_world"
+      },
+      {
+        "name": "available_memory",
+        "description": "The amount of memory available for the function.",
+        "type": "string",
+        "default": "256Mi"
+      },
+      {
+        "name": "max_instance_count",
+        "description": "The maximum number of instances for the function.",
+        "type": "number",
+        "default": 5
+      },
+      {
+        "name": "max_instance_request_concurrency",
+        "description": "The maximum number of concurrent requests per instance.",
+        "type": "number",
+        "default": 1
+      },
+      {
+        "name": "timeout_seconds",
+        "description": "The function timeout in seconds.",
+        "type": "number",
+        "default": 60
+      }
+    ]
+  }
+}

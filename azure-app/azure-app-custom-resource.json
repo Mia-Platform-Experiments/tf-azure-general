@@ -1,0 +1,121 @@
+{
+  "generator": {
+    "configurationBaseFolder": "terraform",
+    "templates": [
+      {
+        "name": "variables",
+        "fileExtension": "tf",
+        "folderName": "app-service",
+        "template": "variable \"service_name\" {\n  description = \"The name of the service (e.g., payment-service). Used for resource naming.\"\n  type        = string\n  default     = \"%spec.service_name%\"\n}\n\nvariable \"resource_group_name\" {\n  description = \"The name of the existing Resource Group in Azure.\"\n  type        = string\n  default     = \"%spec.resource_group_name%\"\n}\n\nvariable \"location\" {\n  description = \"The Azure region to deploy to.\"\n  type        = string\n  default     = \"%spec.location%\"\n}\n\nvariable \"performance_profile\" {\n  description = \"The performance tier selected by the developer (sandbox, development, production).\"\n  type        = string\n  default     = \"%spec.performance_profile%\"\n\n  validation {\n    condition     = contains([\"sandbox\", \"development\", \"production\"], var.performance_profile)\n    error_message = \"Performance profile must be one of: sandbox, development, production.\"\n  }\n}\n\nvariable \"tech_stack\" {\n  description = \"The runtime stack for the application.\"\n  type        = string\n  default     = \"%spec.tech_stack%\"\n}"
+      }
+    ],
+    "type": "template"
+  },
+  "meta": {
+    "apiVersion": "custom-generator.console.mia-platform.eu/v1",
+    "kind": "AzureAppServiceTemplateGenerator"
+  },
+  "name": "my-azure-app-service",
+  "jsonSchema": {
+    "type": "object",
+    "required": [
+      "service_name",
+      "resource_group_name",
+      "location"
+    ],
+    "properties": {
+      "service_name": {
+        "type": "string",
+        "description": "The name of the service (e.g., payment-service). Used for resource naming.",
+        "default": "mia-platform-tf-azure-demo-app",
+        "examples": [
+          "payment-service",
+          "user-service",
+          "order-service"
+        ]
+      },
+      "resource_group_name": {
+        "type": "string",
+        "description": "The name of the existing Resource Group in Azure.",
+        "default": "terraform-demo",
+        "examples": [
+          "terraform-demo",
+          "production-rg"
+        ]
+      },
+      "location": {
+        "type": "string",
+        "description": "The Azure region to deploy to.",
+        "default": "West Europe",
+        "enum": [
+          "East US",
+          "West US",
+          "North Europe",
+          "West Europe",
+          "East Asia",
+          "Southeast Asia",
+          "Canada Central",
+          "Australia East"
+        ]
+      },
+      "performance_profile": {
+        "type": "string",
+        "description": "The performance tier selected by the developer (sandbox, development, production).",
+        "default": "sandbox",
+        "enum": [
+          "sandbox",
+          "development",
+          "production"
+        ]
+      },
+      "tech_stack": {
+        "type": "string",
+        "description": "The runtime stack for the application.",
+        "default": "Node.js 18 LTS",
+        "enum": [
+          "Node.js 18 LTS",
+          "Node.js 20 LTS",
+          "Python 3.11",
+          "Python 3.12",
+          "Java 17",
+          "Java 21",
+          ".NET 8"
+        ]
+      }
+    }
+  },
+  "spec": {
+    "variables": [
+      {
+        "name": "service_name",
+        "description": "The name of the service (e.g., payment-service). Used for resource naming.",
+        "type": "string",
+        "default": "mia-platform-tf-azure-demo-app"
+      },
+      {
+        "name": "resource_group_name",
+        "description": "The name of the existing Resource Group in Azure.",
+        "type": "string",
+        "default": "terraform-demo"
+      },
+      {
+        "name": "location",
+        "description": "The Azure region to deploy to.",
+        "type": "string",
+        "default": "West Europe"
+      },
+      {
+        "name": "performance_profile",
+        "description": "The performance tier selected by the developer (sandbox, development, production).",
+        "type": "string",
+        "default": "sandbox"
+      },
+      {
+        "name": "tech_stack",
+        "description": "The runtime stack for the application.",
+        "type": "string",
+        "default": "Node.js 18 LTS"
+      }
+    ]
+  }
+}
