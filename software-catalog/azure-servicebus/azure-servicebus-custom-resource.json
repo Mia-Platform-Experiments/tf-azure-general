@@ -6,7 +6,7 @@
         "name": "variables",
         "fileExtension": "tf",
         "folderName": "service-bus",
-        "template": "variable \"_module_source\" {\n  default = \"git::https://github.com/Mia-Platform-Experiments/tf-azure-servicebus.git\"\n}\n\nvariable \"service_name\" {\n  description = \"The name of the service (e.g., payment-service). Used for resource naming. Note: Service Bus namespace names must be globally unique in Azure.\"\n  type        = string\n  default     = \"%spec.service_name%\"\n}\n\nvariable \"resource_group_name\" {\n  description = \"The name of the existing Resource Group in Azure.\"\n  type        = string\n  default     = \"%spec.resource_group_name%\"\n}\n\nvariable \"location\" {\n  description = \"The Azure region to deploy to.\"\n  type        = string\n  default     = \"%spec.location%\"\n}\n\nvariable \"performance_profile\" {\n  description = \"The performance tier selected by the developer (sandbox, development, production).\"\n  type        = string\n  default     = \"%spec.performance_profile%\"\n\n  validation {\n    condition     = contains([\"sandbox\", \"development\", \"production\"], var.performance_profile)\n    error_message = \"Performance profile must be one of: sandbox, development, production.\"\n  }\n}\n\nvariable \"queue_names\" {\n  description = \"List of Service Bus queue names to create.\"\n  type        = list(string)\n  default     = %spec.queue_names%\n}\n\nvariable \"topic_names\" {\n  description = \"List of Service Bus topic names to create.\"\n  type        = list(string)\n  default     = %spec.topic_names%\n}"
+        "template": "variable \"_module_source\" {\n  default = \"git::https://github.com/Mia-Platform-Experiments/tf-azure-servicebus.git\"\n}\n\nvariable \"service_name\" {\n  description = \"The name of the service (e.g., payment-service). Used for resource naming. Note: Service Bus namespace names must be globally unique in Azure.\"\n  type        = string\n  default     = \"%spec.service_name%\"\n}\n\nvariable \"resource_group_name\" {\n  description = \"The name of the existing Resource Group in Azure.\"\n  type        = string\n  default     = \"%spec.resource_group_name%\"\n}\n\nvariable \"location\" {\n  description = \"The Azure region to deploy to.\"\n  type        = string\n  default     = \"%spec.location%\"\n}\n\nvariable \"performance_profile\" {\n  description = \"The performance tier selected by the developer (sandbox, development, production).\"\n  type        = string\n  default     = \"%spec.performance_profile%\"\n\n  validation {\n    condition     = contains([\"sandbox\", \"development\", \"production\"], var.performance_profile)\n    error_message = \"Performance profile must be one of: sandbox, development, production.\"\n  }\n}\n\nvariable \"queue_names\" {\n  description = \"List of Service Bus queue names to create.\"\n  type        = list(string)\n  default     = %spec.queue_names%\n}"
       }
     ],
     "type": "template"
@@ -70,7 +70,7 @@
       },
       "queue_names": {
         "type": "array",
-        "description": "List of Service Bus queue names to create (optional).",
+        "description": "List of Service Bus queue names to create.",
         "items": {
           "type": "string"
         },
@@ -80,20 +80,6 @@
         "examples": [
           ["orders-queue", "notifications-queue"],
           ["events-queue"]
-        ]
-      },
-      "topic_names": {
-        "type": "array",
-        "description": "List of Service Bus topic names to create (optional).",
-        "items": {
-          "type": "string"
-        },
-        "default": [
-          "default-topic"
-        ],
-        "examples": [
-          ["events-topic", "alerts-topic"],
-          ["notifications-topic"]
         ]
       }
     }
@@ -128,12 +114,6 @@
         "description": "List of Service Bus queue names to create.",
         "type": "array",
         "default": ["default-queue"]
-      },
-      {
-        "name": "topic_names",
-        "description": "List of Service Bus topic names to create.",
-        "type": "array",
-        "default": ["default-topic"]
       }
     ]
   }
