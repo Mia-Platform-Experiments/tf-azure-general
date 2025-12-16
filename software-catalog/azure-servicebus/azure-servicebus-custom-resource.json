@@ -1,0 +1,140 @@
+{
+  "generator": {
+    "configurationBaseFolder": "terraform",
+    "templates": [
+      {
+        "name": "variables",
+        "fileExtension": "tf",
+        "folderName": "service-bus",
+        "template": "variable \"service_name\" {\n  description = \"The name of the service (e.g., payment-service). Used for resource naming. Note: Service Bus namespace names must be globally unique in Azure.\"\n  type        = string\n  default     = \"%spec.service_name%\"\n}\n\nvariable \"resource_group_name\" {\n  description = \"The name of the existing Resource Group in Azure.\"\n  type        = string\n  default     = \"%spec.resource_group_name%\"\n}\n\nvariable \"location\" {\n  description = \"The Azure region to deploy to.\"\n  type        = string\n  default     = \"%spec.location%\"\n}\n\nvariable \"performance_profile\" {\n  description = \"The performance tier selected by the developer (sandbox, development, production).\"\n  type        = string\n  default     = \"%spec.performance_profile%\"\n\n  validation {\n    condition     = contains([\"sandbox\", \"development\", \"production\"], var.performance_profile)\n    error_message = \"Performance profile must be one of: sandbox, development, production.\"\n  }\n}\n\nvariable \"queue_names\" {\n  description = \"List of Service Bus queue names to create.\"\n  type        = list(string)\n  default     = [%#spec.queue_names%\"%value%\"%^last%,%/last%%/spec.queue_names%]\n}\n\nvariable \"topic_names\" {\n  description = \"List of Service Bus topic names to create.\"\n  type        = list(string)\n  default     = [%#spec.topic_names%\"%value%\"%^last%,%/last%%/spec.topic_names%]\n}"
+      }
+    ],
+    "type": "template"
+  },
+  "meta": {
+    "apiVersion": "custom-generator.console.mia-platform.eu/v1",
+    "kind": "AzureServiceBusTemplateGenerator"
+  },
+  "name": "my-azure-service-bus",
+  "jsonSchema": {
+    "type": "object",
+    "required": [
+      "service_name",
+      "resource_group_name",
+      "location",
+      "performance_profile"
+    ],
+    "properties": {
+      "service_name": {
+        "type": "string",
+        "description": "The name of the service (e.g., payment-service). Used for resource naming. Note: Service Bus namespace names must be globally unique in Azure.",
+        "examples": [
+          "payment-service",
+          "notification-service",
+          "order-service"
+        ]
+      },
+      "resource_group_name": {
+        "type": "string",
+        "description": "The name of the existing Resource Group in Azure.",
+        "default": "terraform-demo",
+        "examples": [
+          "terraform-demo",
+          "production-rg"
+        ]
+      },
+      "location": {
+        "type": "string",
+        "description": "The Azure region to deploy to.",
+        "default": "West Europe",
+        "enum": [
+          "East US",
+          "West US",
+          "North Europe",
+          "West Europe",
+          "East Asia",
+          "Southeast Asia",
+          "Canada Central",
+          "Australia East"
+        ]
+      },
+      "performance_profile": {
+        "type": "string",
+        "description": "The performance tier selected by the developer (sandbox, development, production).",
+        "default": "sandbox",
+        "enum": [
+          "sandbox",
+          "development",
+          "production"
+        ]
+      },
+      "queue_names": {
+        "type": "array",
+        "description": "List of Service Bus queue names to create (optional).",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "default-queue"
+        ],
+        "examples": [
+          ["orders-queue", "notifications-queue"],
+          ["events-queue"]
+        ]
+      },
+      "topic_names": {
+        "type": "array",
+        "description": "List of Service Bus topic names to create (optional).",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "default-topic"
+        ],
+        "examples": [
+          ["events-topic", "alerts-topic"],
+          ["notifications-topic"]
+        ]
+      }
+    }
+  },
+  "spec": {
+    "variables": [
+      {
+        "name": "service_name",
+        "description": "The name of the service (e.g., payment-service). Used for resource naming.",
+        "type": "string"
+      },
+      {
+        "name": "resource_group_name",
+        "description": "The name of the existing Resource Group in Azure.",
+        "type": "string",
+        "default": "terraform-demo"
+      },
+      {
+        "name": "location",
+        "description": "The Azure region to deploy to.",
+        "type": "string",
+        "default": "West Europe"
+      },
+      {
+        "name": "performance_profile",
+        "description": "The performance tier selected by the developer (sandbox, development, production).",
+        "type": "string",
+        "default": "sandbox"
+      },
+      {
+        "name": "queue_names",
+        "description": "List of Service Bus queue names to create.",
+        "type": "array",
+        "default": ["default-queue"]
+      },
+      {
+        "name": "topic_names",
+        "description": "List of Service Bus topic names to create.",
+        "type": "array",
+        "default": ["default-topic"]
+      }
+    ]
+  }
+}
