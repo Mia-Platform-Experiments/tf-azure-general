@@ -23,23 +23,23 @@
                         gray: {
                             50: '#f9f9f9',
                             100: '#f2f2f2',
-                            200: '#e5e5e5',
+                            200: '#e5e5e5', // Border default
                             300: '#cdcdcd',
-                            400: '#acacac',
+                            400: '#acacac', // Icons
                             500: '#898989',
-                            600: '#636363',
-                            700: '#464646',
+                            600: '#636363', // Secondary text
+                            700: '#464646', // Primary text
                             800: '#2b2b2b',
-                            900: '#181818',
+                            900: '#181818', // Backgrounds
                         },
                         brand: {
                             50: '#f4f9ff',
-                            100: '#e5f0fc',
+                            100: '#e5f0fc', // Badges
                             200: '#d2e5fc',
                             300: '#aad1fb',
                             400: '#6db2fc',
-                            500: '#1890ff',
-                            600: '#1261e4',
+                            500: '#1890ff', // Primary Brand / Buttons
+                            600: '#1261e4', // Hover states / Icons
                             700: '#004aaa',
                             800: '#002e6e',
                             900: '#001740',
@@ -47,16 +47,16 @@
                         green: {
                             50: '#effce9',
                             100: '#def8d8',
-                            500: '#4cb61b',
-                            600: '#259100',
-                            700: '#146d05',
+                            500: '#4cb61b', // Icon
+                            600: '#259100', // Text
+                            700: '#146d05', // Border/Text
                         },
                         red: {
                             50: '#fff6f6',
                             100: '#ffebeb',
+                            400: '#ff807f', // Text
                             500: '#ff5453',
-                            600: '#e50020',
-                            700: '#a80101',
+                            700: '#a80101', // Border/Text
                         },
                         yellow: {
                             50: '#FFF8D4',
@@ -140,7 +140,8 @@
           TENANT_ID: "7c0fca8e-8492-4f92-8c58-8f0beb87693a",
           SUBSCRIPTION_ID: "633fa2a8-982c-431d-9535-a90d8948b27c",
           RESOURCE_GROUP: "terraform-demo",
-          PROXY_URL: "https://azure-monitor.mia-demo-re5gu6.gcp.mia-platform.eu",
+          // UPDATED: Proxy URL now includes /az-proxy
+          PROXY_URL: "https://azure-monitor.mia-demo-re5gu6.gcp.mia-platform.eu/az-proxy",
           
           get ENDPOINTS() {
             return {
@@ -167,6 +168,24 @@
           localStorage.removeItem('azure_sp_auth');
         };
 
+        // --- Helper: Safe Fetch ---
+        async function safeFetch(url, options) {
+            const response = await fetch(url, options);
+            const contentType = response.headers.get("content-type");
+            const isJson = contentType && contentType.includes("application/json");
+            
+            if (isJson) {
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || data.error?.message || data.error_description || `API Error: ${response.status}`);
+                }
+                return data;
+            } else {
+                // If not JSON (likely HTML error page or 404), throw meaningful error
+                throw new Error(`Invalid server response (${response.status}). Expected JSON.`);
+            }
+        }
+
         // --- Visual Components ---
 
         const StatusBadge = ({ state }) => {
@@ -179,7 +198,7 @@
           } else if (['stopped', 'failed', 'canceled'].includes(s)) {
              styleClass = "bg-red-50 text-red-700 border-red-100";
           } else if (['creating', 'updating', 'deleting'].includes(s)) {
-             styleClass = "bg-brand-50 text-brand-700 border-brand-100";
+             styleClass = "bg-brand-100 text-brand-700 border-brand-500";
           }
 
           return (
@@ -190,7 +209,6 @@
         };
 
         const AzureIcon = ({ type }) => {
-            // Using correct raw GitHub URLs for Azure Icons
             const BASE_URL = "https://raw.githubusercontent.com/benc-uk/icon-collection/master/azure-icons";
             
             let iconUrl = `${BASE_URL}/Resource-Groups.svg`;
@@ -364,10 +382,9 @@
                         </div>
                     </div>
 
-                    {/* Health Card - WHITE BACKGROUND */}
+                    {/* Health Card */}
                     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-[0_2px_10px_-4px_rgba(24,144,255,0.15)] relative group">
                         
-                        {/* Background Decoration */}
                         <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
                             <div className="absolute right-0 top-0 p-4 opacity-[0.1]">
                                 <ShieldCheck className="w-24 h-24 text-brand-600" />
@@ -377,18 +394,16 @@
                         <div className="flex justify-between items-start relative z-20">
                             <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">System Health</p>
                             
-                            {/* Tooltip Container */}
                             <div className="relative group/tooltip">
                                 <HelpCircle className="w-4 h-4 text-gray-400 cursor-help hover:text-brand-600 transition-colors" />
                                 
-                                {/* Tooltip Body - High Z-Index, Outside Clipping */}
                                 <div className="absolute right-0 top-7 w-72 p-4 bg-gray-900 text-white text-xs rounded-lg shadow-2xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none group-hover/tooltip:pointer-events-auto z-50 border border-gray-700">
                                     <div className="font-semibold mb-2 border-b border-gray-700 pb-2 text-white uppercase tracking-wide">Health Calculation</div>
                                     <div className="space-y-2">
                                         <p className="text-gray-300">Based on <strong className="text-white">{stats.total}</strong> monitored resources.</p>
                                         
                                         <div className="flex justify-between items-center bg-gray-800/50 p-1.5 rounded">
-                                            <span className="text-green-400 font-medium flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> {healthyResources} Healthy</span> 
+                                            <span className="text-green-500 font-medium flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> {healthyResources} Healthy</span> 
                                             <span className="text-[10px] text-gray-500">Running / Succeeded</span>
                                         </div>
                                         
@@ -402,7 +417,6 @@
                             </div>
                         </div>
 
-                        {/* Stacking Context Fix: Ensure this text doesn't overlap tooltip */}
                         <div className="relative z-10">
                             <h3 className="text-3xl font-bold text-gray-900 mt-2">{healthPercentage}%</h3>
                             <p className="text-green-600 text-xs mt-4 flex items-center gap-1 font-medium">
@@ -417,7 +431,6 @@
         const SystemDetailsView = ({ stats, chartData, activityLog }) => {
             return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-2 duration-300">
-                    {/* Visuals */}
                     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center">
                         <h4 className="text-gray-900 font-semibold mb-6 self-start flex items-center gap-2 text-sm">
                             <Activity className="w-4 h-4 text-brand-600" />
@@ -426,7 +439,6 @@
                         <SimpleDonutChart data={chartData} />
                     </div>
 
-                    {/* Semaphores with Tooltips */}
                     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm relative z-0">
                         <h4 className="text-gray-900 font-semibold mb-6 flex items-center gap-2 text-sm">
                             <Cpu className="w-4 h-4 text-accent-purple" />
@@ -441,7 +453,6 @@
                         </div>
                     </div>
 
-                     {/* Activity Log - WHITE BACKGROUND, NO OVERFLOW HIDDEN */}
                     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-gray-600 font-mono text-xs flex flex-col h-[340px] relative z-0">
                         <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
                             <h4 className="text-gray-900 font-semibold flex items-center gap-2 text-sm font-sans">
@@ -453,7 +464,6 @@
                             </Tooltip>
                         </div>
                         
-                        {/* Custom scrollbar wrapper with overflow */}
                         <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2">
                             {activityLog.map((log, i) => (
                                 <div key={i} className="flex justify-between items-start pb-2 border-b border-gray-50 last:border-0">
@@ -481,7 +491,6 @@
                     const isLoadingDetails = loadingChildren[resource.id];
                     const children = childResources[resource.id] || [];
 
-                    // Safe status extraction
                     const status = resource.properties?.state || resource.properties?.provisioningState || resource.provisioningState || "Unknown";
 
                     return (
@@ -635,31 +644,45 @@
             }
           }, []);
 
-          const fetchToken = async (creds) => {
-            const response = await fetch(CONFIG.ENDPOINTS.TOKEN, {
-              method: 'POST',
-              headers: { 
-                'Content-Type': 'application/json',
-                'X-Azure-Tenant-Id': CONFIG.TENANT_ID,
-                'X-Azure-Client-Id': creds.clientId,
-                'X-Azure-Client-Secret': creds.clientSecret
+          // Central error handler for redirects
+          const handleApiError = (err) => {
+              console.error("API Error:", err);
+              // Only alert if we haven't already shown an error state in login
+              if (accessToken) { 
+                  alert("Connection to Azure failed or session expired. Redirecting to login.");
+                  logout();
+              } else {
+                  // If we are in login phase, just throw to be caught by login function
+                  throw err;
               }
-            });
+          };
 
-            if (!response.ok) {
-              const err = await response.json();
-              throw new Error(err.message || 'Failed to get token via proxy');
+          const fetchToken = async (creds) => {
+            try {
+                const data = await safeFetch(CONFIG.ENDPOINTS.TOKEN, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Azure-Tenant-Id': CONFIG.TENANT_ID,
+                        'X-Azure-Client-Id': creds.clientId,
+                        'X-Azure-Client-Secret': creds.clientSecret
+                    }
+                });
+                return data.access_token;
+            } catch (e) {
+                // Let the login function handle this specifically
+                throw e;
             }
-            const data = await response.json();
-            return data.access_token;
           };
 
           const getResources = async (token) => {
-            const url = CONFIG.ENDPOINTS.GET_RESOURCES(CONFIG.SUBSCRIPTION_ID, CONFIG.RESOURCE_GROUP);
-            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!response.ok) throw new Error('Failed to fetch resources');
-            const data = await response.json();
-            return data.value;
+            try {
+                const url = CONFIG.ENDPOINTS.GET_RESOURCES(CONFIG.SUBSCRIPTION_ID, CONFIG.RESOURCE_GROUP);
+                const data = await safeFetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                return data.value;
+            } catch (e) {
+                handleApiError(e);
+            }
           };
 
           const login = async (creds) => {
@@ -671,7 +694,7 @@
               setCredentials(creds);
               saveServicePrincipal(creds);
               const res = await getResources(token);
-              setResources(res);
+              if (res) setResources(res);
             } catch (err) {
               console.error(err);
               setError(err.message || "Failed to authenticate.");
@@ -686,9 +709,9 @@
             setLoading(true);
             try {
               const res = await getResources(accessToken);
-              setResources(res);
+              if (res) setResources(res);
             } catch (err) {
-              setError("Failed to refresh data");
+              // Handled by getResources wrapper
             } finally {
               setLoading(false);
             }
@@ -720,8 +743,8 @@
                 if (resource.type === "Microsoft.Storage/storageAccounts") {
                     endpoint = `${baseUrl}/blobServices/default/containers?api-version=2021-04-01`;
                 } else if (resource.type === "Microsoft.ServiceBus/namespaces") {
-                    const q = await fetch(`${baseUrl}/queues?api-version=2021-11-01`, { headers: { 'Authorization': `Bearer ${accessToken}` } }).then(r=>r.json());
-                    const t = await fetch(`${baseUrl}/topics?api-version=2021-11-01`, { headers: { 'Authorization': `Bearer ${accessToken}` } }).then(r=>r.json());
+                    const q = await safeFetch(`${baseUrl}/queues?api-version=2021-11-01`, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                    const t = await safeFetch(`${baseUrl}/topics?api-version=2021-11-01`, { headers: { 'Authorization': `Bearer ${accessToken}` } });
                     data = [...(q.value || []), ...(t.value || [])];
                 } else if (resource.type === "Microsoft.DBforPostgreSQL/flexibleServers") {
                     endpoint = `${baseUrl}/databases?api-version=2022-12-01`;
@@ -730,15 +753,15 @@
                 }
 
                 if (endpoint && resource.type !== "Microsoft.ServiceBus/namespaces") {
-                    const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${accessToken}` } });
-                    if(!res.ok) throw new Error("Failed to fetch child resources");
-                    const json = await res.json();
+                    const json = await safeFetch(endpoint, { headers: { 'Authorization': `Bearer ${accessToken}` } });
                     data = json.value || [];
                 }
               
               setChildResources(prev => ({ ...prev, [resource.id]: data }));
             } catch (err) {
+              // Partial failure on details shouldn't necessarily logout, but warn
               console.error("Error fetching details", err);
+              // handleApiError(err); // Optional: decide if you want strict logout on any error
             } finally {
               setLoadingChildren(prev => ({ ...prev, [resource.id]: false }));
             }
