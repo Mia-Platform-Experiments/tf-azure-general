@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Dashboard</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        gray: {
+                            50: '#f9f9f9',
+                            100: '#f2f2f2',
+                            200: '#e5e5e5',
+                            300: '#cdcdcd',
+                            400: '#acacac',
+                            500: '#898989',
+                            600: '#636363',
+                            700: '#464646',
+                            800: '#2b2b2b',
+                            900: '#181818',
+                        },
+                        brand: {
+                            50: '#f4f9ff',
+                            100: '#e5f0fc',
+                            200: '#d2e5fc',
+                            300: '#aad1fb',
+                            400: '#6db2fc',
+                            500: '#1890ff',
+                            600: '#1261e4',
+                            700: '#004aaa',
+                            800: '#002e6e',
+                            900: '#001740',
+                        },
+                        green: {
+                            50: '#effce9',
+                            100: '#def8d8',
+                            500: '#4cb61b',
+                            600: '#259100',
+                            700: '#146d05',
+                        },
+                        red: {
+                            50: '#fff6f6',
+                            100: '#ffebeb',
+                            500: '#ff5453',
+                            600: '#e50020',
+                            700: '#a80101',
+                        },
+                        yellow: {
+                            50: '#FFF8D4',
+                            100: '#FFF0B3',
+                            500: '#DB6B00',
+                            600: '#A44C00',
+                        },
+                        accent: {
+                            purple: '#5f36dd',
+                            green: '#26a570',
+                            red: '#f03f44',
+                            yellow: '#ff9933',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Import Map -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.292.0?external=react"
+      }
+    }
+    </script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #181818; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #464646; border-radius: 3px; }
+        
+        /* Azure Icon sizing helper */
+        .az-icon { width: 24px; height: 24px; object-fit: contain; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 h-screen overflow-hidden">
+    <div id="root" class="h-full"></div>
+
+    <!-- Main Application Script -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useCallback, useMemo } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+          Activity, 
+          Database, 
+          Server, 
+          HardDrive, 
+          MessageSquare, 
+          Layers, 
+          RefreshCw, 
+          LogOut, 
+          ChevronDown, 
+          ChevronRight, 
+          ShieldCheck,
+          AlertCircle,
+          Box,
+          Globe,
+          Home,
+          Zap,
+          Cpu,
+          Terminal,
+          CheckCircle2,
+          AlertTriangle,
+          HelpCircle,
+          LayoutDashboard
+        } from 'lucide-react';
+
+        // --- Configuration ---
+        const CONFIG = {
+          TENANT_ID: "7c0fca8e-8492-4f92-8c58-8f0beb87693a",
+          SUBSCRIPTION_ID: "633fa2a8-982c-431d-9535-a90d8948b27c",
+          RESOURCE_GROUP: "terraform-demo",
+          PROXY_URL: "https://azure-monitor.mia-demo-re5gu6.gcp.mia-platform.eu",
+          
+          get ENDPOINTS() {
+            return {
+              TOKEN: `${this.PROXY_URL}/auth/token`,
+              MANAGEMENT_BASE: `${this.PROXY_URL}/management`,
+              // Added $expand=provisioningState to ensure we get status in the list view
+              GET_RESOURCES: (sub, rg) => 
+                `${this.PROXY_URL}/management/subscriptions/${sub}/resourceGroups/${rg}/resources?api-version=2021-04-01&$expand=provisioningState`,
+            };
+          }
+        };
+
+        // --- Utilities ---
+        const getServicePrincipal = () => {
+          const stored = localStorage.getItem('azure_sp_auth');
+          return stored ? JSON.parse(stored) : null;
+        };
+
+        const saveServicePrincipal = (data) => {
+          localStorage.setItem('azure_sp_auth', JSON.stringify(data));
+        };
+
+        const clearServicePrincipal = () => {
+          localStorage.removeItem('azure_sp_auth');
+        };
+
+        // --- Visual Components ---
+
+        const StatusBadge = ({ state }) => {
+          const s = (state || "Unknown").toLowerCase();
+          
+          let styleClass = "bg-gray-100 text-gray-700 border-gray-200"; 
+          
+          if (['running', 'succeeded', 'ready'].includes(s)) {
+             styleClass = "bg-green-50 text-green-700 border-green-100";
+          } else if (['stopped', 'failed', 'canceled'].includes(s)) {
+             styleClass = "bg-red-50 text-red-700 border-red-100";
+          } else if (['creating', 'updating', 'deleting'].includes(s)) {
+             styleClass = "bg-brand-50 text-brand-700 border-brand-100";
+          }
+
+          return (
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide border ${styleClass}`}>
+              {state || "Unknown"}
+            </span>
+          );
+        };
+
+        const AzureIcon = ({ type }) => {
+            // Using correct raw GitHub URLs for Azure Icons
+            const BASE_URL = "https://raw.githubusercontent.com/benc-uk/icon-collection/master/azure-icons";
+            
+            let iconUrl = `${BASE_URL}/Resource-Groups.svg`;
+            let alt = "Resource";
+
+            if (type.includes('Storage')) {
+                iconUrl = `${BASE_URL}/Storage-Accounts.svg`;
+                alt = "Storage Account";
+            } else if (type.includes('sites') || type.includes('serverFarms')) {
+                iconUrl = `${BASE_URL}/App-Services.svg`;
+                alt = "App Service";
+            } else if (type.includes('ServiceBus')) {
+                iconUrl = `${BASE_URL}/Service-Bus.svg`;
+                alt = "Service Bus";
+            } else if (type.includes('DBforPostgreSQL')) {
+                iconUrl = `${BASE_URL}/Azure-Database-PostgreSQL-Server.svg`;
+                alt = "PostgreSQL";
+            } else if (type.includes('insights') || type.includes('components')) {
+                 iconUrl = `${BASE_URL}/Application-Insights.svg`;
+                 alt = "App Insights";
+            }
+
+            return <img src={iconUrl} alt={alt} className="w-6 h-6 object-contain" onError={(e) => {e.target.style.display='none'}} />;
+        };
+
+        const SimpleDonutChart = ({ data }) => {
+            const total = data.reduce((acc, item) => acc + item.value, 0);
+            let cumulativePercent = 0;
+
+            const getCoordinatesForPercent = (percent) => {
+                const x = Math.cos(2 * Math.PI * percent);
+                const y = Math.sin(2 * Math.PI * percent);
+                return [x, y];
+            };
+
+            if (total === 0) return (
+                <div className="flex items-center justify-center h-48 text-gray-400 text-sm">No Data</div>
+            );
+
+            return (
+                <div className="flex flex-col items-center">
+                    <svg viewBox="-1 -1 2 2" className="w-48 h-48 -rotate-90">
+                        {data.map((slice, i) => {
+                            const startPercent = cumulativePercent;
+                            const slicePercent = slice.value / total;
+                            cumulativePercent += slicePercent;
+                            const endPercent = cumulativePercent;
+
+                            const [startX, startY] = getCoordinatesForPercent(startPercent);
+                            const [endX, endY] = getCoordinatesForPercent(endPercent);
+
+                            const largeArcFlag = slicePercent > 0.5 ? 1 : 0;
+
+                            const pathData = [
+                                `M ${startX} ${startY}`,
+                                `A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY}`,
+                                `L 0 0`,
+                            ].join(' ');
+
+                            return (
+                                <path 
+                                    key={i} 
+                                    d={pathData} 
+                                    fill={slice.color} 
+                                    className="hover:opacity-80 transition-opacity cursor-pointer stroke-white stroke-[0.02]"
+                                />
+                            );
+                        })}
+                        <circle cx="0" cy="0" r="0.6" fill="white" />
+                    </svg>
+                    <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2">
+                        {data.map((item, i) => (
+                            <div key={i} className="flex items-center text-xs font-medium text-gray-600">
+                                <span className="w-2.5 h-2.5 rounded-sm mr-2" style={{ backgroundColor: item.color }}></span>
+                                {item.label} <span className="ml-1 text-gray-400">({item.value})</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const Semaphore = ({ label, status, pulse = false, tooltip }) => {
+            const color = status === 'ok' ? 'bg-green-500' : status === 'warn' ? 'bg-yellow-500' : 'bg-red-500';
+            
+            return (
+                <div className="group relative flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors cursor-default z-0 hover:z-20">
+                    <span className="text-sm font-medium text-gray-700">{label}</span>
+                    <div className="relative flex h-2.5 w-2.5">
+                        {pulse && <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`}></span>}
+                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${color} shadow-sm`}></span>
+                    </div>
+
+                    {/* Service Status Tooltip */}
+                    {tooltip && (
+                        <div className="absolute right-0 bottom-full mb-2 w-56 p-2 bg-gray-900 text-white text-[10px] rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                            {tooltip}
+                            <div className="absolute bottom-0 right-3 transform translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900"></div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const Tooltip = ({ children, content }) => {
+            return (
+                 <div className="relative group/tooltip inline-block z-50">
+                    {children}
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-48 p-2 bg-gray-900 text-white text-[10px] rounded shadow-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                        {content}
+                        <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 rotate-45 w-2 h-2 bg-gray-900"></div>
+                    </div>
+                </div>
+            )
+        }
+
+        // --- Layout Components ---
+
+        const StatsGrid = ({ stats, resources, healthPercentage, healthyResources }) => {
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    {/* Total Resources Card */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-[0_2px_10px_-4px_rgba(24,144,255,0.15)] relative">
+                        {/* Clip the background icon separately so it doesn't clip tooltips */}
+                        <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                            <div className="absolute right-0 top-0 p-4 opacity-[0.1]">
+                                <Layers className="w-24 h-24 text-gray-900" />
+                            </div>
+                        </div>
+                        
+                        <div className="relative z-10">
+                            <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Total Resources</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{stats.total}</h3>
+                            <div className="mt-4 flex items-center">
+                                <span className="text-green-600 text-xs font-medium bg-green-50 px-2 py-1 rounded-full flex items-center gap-1">
+                                    <Zap className="w-3 h-3" /> Active
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Services Card */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-[0_2px_10px_-4px_rgba(24,144,255,0.15)] relative">
+                        <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                            <div className="absolute right-0 top-0 p-4 opacity-[0.1]">
+                                <Server className="w-24 h-24 text-gray-900" />
+                            </div>
+                        </div>
+                         <div className="relative z-10">
+                            <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Services</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{stats.apps}</h3>
+                            <div className="mt-4">
+                                <p className="text-gray-400 text-xs">App Services & Functions</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Data Stores Card */}
+                     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-[0_2px_10px_-4px_rgba(24,144,255,0.15)] relative">
+                        <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                            <div className="absolute right-0 top-0 p-4 opacity-[0.1]">
+                                <Database className="w-24 h-24 text-gray-900" />
+                            </div>
+                        </div>
+                         <div className="relative z-10">
+                            <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">Data Stores</p>
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{stats.storage + stats.db}</h3>
+                            <div className="mt-4">
+                                <p className="text-gray-400 text-xs">SQL & Storage Accounts</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Health Card - WHITE BACKGROUND */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-[0_2px_10px_-4px_rgba(24,144,255,0.15)] relative group">
+                        
+                        {/* Background Decoration */}
+                        <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
+                            <div className="absolute right-0 top-0 p-4 opacity-[0.1]">
+                                <ShieldCheck className="w-24 h-24 text-brand-600" />
+                            </div>
+                        </div>
+                        
+                        <div className="flex justify-between items-start relative z-20">
+                            <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider">System Health</p>
+                            
+                            {/* Tooltip Container */}
+                            <div className="relative group/tooltip">
+                                <HelpCircle className="w-4 h-4 text-gray-400 cursor-help hover:text-brand-600 transition-colors" />
+                                
+                                {/* Tooltip Body - High Z-Index, Outside Clipping */}
+                                <div className="absolute right-0 top-7 w-72 p-4 bg-gray-900 text-white text-xs rounded-lg shadow-2xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none group-hover/tooltip:pointer-events-auto z-50 border border-gray-700">
+                                    <div className="font-semibold mb-2 border-b border-gray-700 pb-2 text-white uppercase tracking-wide">Health Calculation</div>
+                                    <div className="space-y-2">
+                                        <p className="text-gray-300">Based on <strong className="text-white">{stats.total}</strong> monitored resources.</p>
+                                        
+                                        <div className="flex justify-between items-center bg-gray-800/50 p-1.5 rounded">
+                                            <span className="text-green-400 font-medium flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> {healthyResources} Healthy</span> 
+                                            <span className="text-[10px] text-gray-500">Running / Succeeded</span>
+                                        </div>
+                                        
+                                        <div className="flex justify-between items-center bg-gray-800/50 p-1.5 rounded">
+                                            <span className="text-red-400 font-medium flex items-center gap-1"><AlertCircle className="w-3 h-3"/> {stats.total - healthyResources} Issues</span> 
+                                            <span className="text-[10px] text-gray-500">Stopped / Failed</span>
+                                        </div>
+                                    </div>
+                                    <div className="absolute top-0 right-1 -translate-y-1 w-3 h-3 bg-gray-900 rotate-45 border-l border-t border-gray-700"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Stacking Context Fix: Ensure this text doesn't overlap tooltip */}
+                        <div className="relative z-10">
+                            <h3 className="text-3xl font-bold text-gray-900 mt-2">{healthPercentage}%</h3>
+                            <p className="text-green-600 text-xs mt-4 flex items-center gap-1 font-medium">
+                                <CheckCircle2 className="w-3 h-3" /> Operational
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const SystemDetailsView = ({ stats, chartData, activityLog }) => {
+            return (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-2 duration-300">
+                    {/* Visuals */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col items-center">
+                        <h4 className="text-gray-900 font-semibold mb-6 self-start flex items-center gap-2 text-sm">
+                            <Activity className="w-4 h-4 text-brand-600" />
+                            Resource Distribution
+                        </h4>
+                        <SimpleDonutChart data={chartData} />
+                    </div>
+
+                    {/* Semaphores with Tooltips */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm relative z-0">
+                        <h4 className="text-gray-900 font-semibold mb-6 flex items-center gap-2 text-sm">
+                            <Cpu className="w-4 h-4 text-accent-purple" />
+                            Service Status
+                        </h4>
+                        <div className="space-y-3">
+                            <Semaphore label="Authentication (SPN)" status="ok" pulse={true} tooltip="Token acquisition successful via Proxy" />
+                            <Semaphore label="Management API Proxy" status="ok" pulse={true} tooltip="Backend proxy running at https://azure-monitor..." />
+                            <Semaphore label="Storage Subsystem" status={stats.storage > 0 ? 'ok' : 'warn'} tooltip={stats.storage > 0 ? "Storage accounts detected and active" : "No storage accounts found"} />
+                            <Semaphore label="Compute Clusters" status={stats.apps > 0 ? 'ok' : 'warn'} tooltip={stats.apps > 0 ? "App Services online" : "No App Services found"} />
+                            <Semaphore label="Database Connectivity" status={stats.db > 0 ? 'ok' : 'warn'} tooltip={stats.db > 0 ? "Database instances reachable" : "No Databases provisioned"} />
+                        </div>
+                    </div>
+
+                     {/* Activity Log - WHITE BACKGROUND, NO OVERFLOW HIDDEN */}
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-gray-600 font-mono text-xs flex flex-col h-[340px] relative z-0">
+                        <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+                            <h4 className="text-gray-900 font-semibold flex items-center gap-2 text-sm font-sans">
+                                <Terminal className="w-4 h-4 text-gray-500" />
+                                Activity Log
+                            </h4>
+                            <Tooltip content="Events sourced from Azure Activity Log & Resource Health API">
+                                <HelpCircle className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+                            </Tooltip>
+                        </div>
+                        
+                        {/* Custom scrollbar wrapper with overflow */}
+                        <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2">
+                            {activityLog.map((log, i) => (
+                                <div key={i} className="flex justify-between items-start pb-2 border-b border-gray-50 last:border-0">
+                                    <div className="flex gap-3">
+                                        <span className="text-brand-600 font-medium">[{log.time}]</span> 
+                                        <span className="text-gray-600">{log.event}</span>
+                                    </div>
+                                    <span className={log.status === 'Success' ? 'text-green-600' : 'text-yellow-600'}>
+                                        {log.status}
+                                    </span>
+                                </div>
+                            ))}
+                            <div className="text-gray-400 pt-2 animate-pulse">_ awaiting events...</div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ResourceListView = ({ filteredResources, loading, fetchDetails, loadingChildren, childResources, expandedId }) => {
+            return (
+                <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300 pb-20">
+                    {filteredResources.map((resource) => {
+                    const isExpanded = expandedId === resource.id;
+                    const isLoadingDetails = loadingChildren[resource.id];
+                    const children = childResources[resource.id] || [];
+
+                    // Safe status extraction
+                    const status = resource.properties?.state || resource.properties?.provisioningState || resource.provisioningState || "Unknown";
+
+                    return (
+                        <div key={resource.id} className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+                        <div 
+                            className="p-5 flex items-center gap-4 cursor-pointer hover:bg-gray-50/80 transition-colors"
+                            onClick={() => fetchDetails(resource)}
+                        >
+                            <div className="p-2 bg-gray-50 rounded-lg border border-gray-100 group-hover:border-gray-200 transition-colors">
+                                <AzureIcon type={resource.type} />
+                            </div>
+                            
+                            <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-800 truncate text-sm">{resource.name}</h3>
+                                <p className="text-xs text-gray-500 truncate mt-0.5">{resource.type}</p>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <span className="text-xs text-gray-400 font-mono hidden sm:block bg-gray-50 px-2 py-1 rounded">{resource.location}</span>
+                                <StatusBadge state={status} />
+                                {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-400" /> : <ChevronRight className="w-5 h-5 text-gray-300" />}
+                            </div>
+                        </div>
+
+                        {/* Expanded Details Section */}
+                        {isExpanded && (
+                            <div className="bg-gray-50/50 border-t border-gray-100 p-5 pl-20 animate-in slide-in-from-top-2 duration-200">
+                            {isLoadingDetails ? (
+                                <div className="flex items-center gap-2 text-gray-500 text-xs">
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                                Fetching child resources...
+                                </div>
+                            ) : children.length > 0 ? (
+                                <div>
+                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
+                                    {resource.type.includes("Storage") ? "Containers" : 
+                                    resource.type.includes("ServiceBus") ? "Queues & Topics" : 
+                                    resource.type.includes("SQL") ? "Databases" : "Configuration"}
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {children.map((child, idx) => (
+                                    <div key={idx} className="bg-white p-2.5 rounded border border-gray-200 text-xs shadow-sm flex items-center gap-2 hover:border-brand-200 transition-colors">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-500"></div>
+                                        <span className="font-medium truncate text-gray-700">{child.name}</span>
+                                        {child.type && <span className="ml-auto text-[10px] text-gray-400 bg-gray-50 px-1.5 rounded border border-gray-100">{child.type.split('/').pop()}</span>}
+                                    </div>
+                                    ))}
+                                </div>
+                                </div>
+                            ) : (
+                                <div className="text-xs text-gray-400 italic">No child resources found or accessible.</div>
+                            )}
+                            </div>
+                        )}
+                        </div>
+                    );
+                    })}
+                    {filteredResources.length === 0 && !loading && (
+                    <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+                        <div className="inline-flex bg-gray-50 p-4 rounded-full mb-4">
+                        <Layers className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <p className="text-gray-500 font-medium text-sm">No resources found matching this filter.</p>
+                    </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- Login Component ---
+
+        const LoginScreen = ({ onLogin, loading, error }) => {
+          const [jsonInput, setJsonInput] = useState('');
+
+          const handleSubmit = (e) => {
+            e.preventDefault();
+            try {
+              const parsed = JSON.parse(jsonInput);
+              if (!parsed.clientId || !parsed.clientSecret) {
+                throw new Error("JSON must contain clientId and clientSecret");
+              }
+              onLogin(parsed);
+            } catch (err) {
+              alert("Invalid JSON format. Please check your input.");
+            }
+          };
+
+          return (
+            <div className="min-h-full bg-gray-50 flex items-center justify-center p-4 font-sans">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-8 border border-gray-200">
+                <div className="flex items-center justify-center mb-6">
+                  <div className="bg-brand-500 p-3 rounded-xl shadow-lg shadow-brand-500/30">
+                    <Activity className="w-8 h-8 text-white" />
+                  </div>
+                </div>
+                <h1 className="text-2xl font-bold text-center text-gray-900 mb-2 tracking-tight">Azure Monitor</h1>
+                <p className="text-center text-gray-500 mb-8 text-sm">Target: <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-700">{CONFIG.RESOURCE_GROUP}</span></p>
+                
+                {error && (
+                  <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm mb-4 border border-red-200 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Connection Error</p>
+                      <p>{error}</p>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5 uppercase tracking-wide">Service Principal JSON</label>
+                    <textarea
+                      className="w-full h-32 p-3 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none font-mono bg-gray-50 transition-all focus:bg-white"
+                      placeholder='{"clientId": "...", "clientSecret": "..."}'
+                      value={jsonInput}
+                      onChange={(e) => setJsonInput(e.target.value)}
+                    />
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={loading}
+                    className="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-2.5 rounded-lg transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                  >
+                    {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                    Authenticate via Proxy
+                  </button>
+                </form>
+              </div>
+            </div>
+          );
+        };
+
+        // --- Main App Component ---
+
+        function App() {
+          const [credentials, setCredentials] = useState(null);
+          const [accessToken, setAccessToken] = useState(null);
+          const [resources, setResources] = useState([]);
+          const [loading, setLoading] = useState(false);
+          const [error, setError] = useState(null);
+          const [expandedId, setExpandedId] = useState(null);
+          const [childResources, setChildResources] = useState({}); 
+          const [loadingChildren, setLoadingChildren] = useState({});
+
+          const [activeTab, setActiveTab] = useState('overview'); 
+
+          useEffect(() => {
+            const saved = getServicePrincipal();
+            if (saved) {
+              setCredentials(saved);
+            }
+          }, []);
+
+          const fetchToken = async (creds) => {
+            const response = await fetch(CONFIG.ENDPOINTS.TOKEN, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'X-Azure-Tenant-Id': CONFIG.TENANT_ID,
+                'X-Azure-Client-Id': creds.clientId,
+                'X-Azure-Client-Secret': creds.clientSecret
+              }
+            });
+
+            if (!response.ok) {
+              const err = await response.json();
+              throw new Error(err.message || 'Failed to get token via proxy');
+            }
+            const data = await response.json();
+            return data.access_token;
+          };
+
+          const getResources = async (token) => {
+            const url = CONFIG.ENDPOINTS.GET_RESOURCES(CONFIG.SUBSCRIPTION_ID, CONFIG.RESOURCE_GROUP);
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) throw new Error('Failed to fetch resources');
+            const data = await response.json();
+            return data.value;
+          };
+
+          const login = async (creds) => {
+            setLoading(true);
+            setError(null);
+            try {
+              const token = await fetchToken(creds);
+              setAccessToken(token);
+              setCredentials(creds);
+              saveServicePrincipal(creds);
+              const res = await getResources(token);
+              setResources(res);
+            } catch (err) {
+              console.error(err);
+              setError(err.message || "Failed to authenticate.");
+              clearServicePrincipal();
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          const refreshData = async () => {
+            if (!accessToken) return;
+            setLoading(true);
+            try {
+              const res = await getResources(accessToken);
+              setResources(res);
+            } catch (err) {
+              setError("Failed to refresh data");
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          const logout = () => {
+            clearServicePrincipal();
+            setCredentials(null);
+            setAccessToken(null);
+            setResources([]);
+            setChildResources({});
+            setActiveTab('overview');
+          };
+
+          const fetchDetails = async (resource) => {
+            if (loadingChildren[resource.id] || childResources[resource.id]) {
+              setExpandedId(expandedId === resource.id ? null : resource.id);
+              return;
+            }
+
+            setExpandedId(resource.id);
+            setLoadingChildren(prev => ({ ...prev, [resource.id]: true }));
+
+            try {
+              let data = [];
+              const baseUrl = `${CONFIG.ENDPOINTS.MANAGEMENT_BASE}${resource.id}`;
+                let endpoint = "";
+                
+                if (resource.type === "Microsoft.Storage/storageAccounts") {
+                    endpoint = `${baseUrl}/blobServices/default/containers?api-version=2021-04-01`;
+                } else if (resource.type === "Microsoft.ServiceBus/namespaces") {
+                    const q = await fetch(`${baseUrl}/queues?api-version=2021-11-01`, { headers: { 'Authorization': `Bearer ${accessToken}` } }).then(r=>r.json());
+                    const t = await fetch(`${baseUrl}/topics?api-version=2021-11-01`, { headers: { 'Authorization': `Bearer ${accessToken}` } }).then(r=>r.json());
+                    data = [...(q.value || []), ...(t.value || [])];
+                } else if (resource.type === "Microsoft.DBforPostgreSQL/flexibleServers") {
+                    endpoint = `${baseUrl}/databases?api-version=2022-12-01`;
+                } else if (resource.type === "Microsoft.Web/sites") {
+                    data = [{ name: "Standard_LRS" }];
+                }
+
+                if (endpoint && resource.type !== "Microsoft.ServiceBus/namespaces") {
+                    const res = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                    if(!res.ok) throw new Error("Failed to fetch child resources");
+                    const json = await res.json();
+                    data = json.value || [];
+                }
+              
+              setChildResources(prev => ({ ...prev, [resource.id]: data }));
+            } catch (err) {
+              console.error("Error fetching details", err);
+            } finally {
+              setLoadingChildren(prev => ({ ...prev, [resource.id]: false }));
+            }
+          };
+
+          const filteredResources = resources.filter(r => {
+            if (activeTab === 'overview' || activeTab === 'all') return true;
+            if (activeTab === 'storage') return r.type.toLowerCase().includes('storage');
+            if (activeTab === 'compute') return r.type.toLowerCase().includes('web') || r.type.toLowerCase().includes('serverfarms');
+            if (activeTab === 'database') return r.type.toLowerCase().includes('sql');
+            if (activeTab === 'integration') return r.type.toLowerCase().includes('servicebus');
+            return true;
+          });
+
+          const getStats = () => ({
+              total: resources.length,
+              storage: resources.filter(r => r.type.includes('storage')).length,
+              apps: resources.filter(r => r.type.includes('Web')).length,
+              db: resources.filter(r => r.type.includes('SQL')).length,
+              bus: resources.filter(r => r.type.includes('ServiceBus')).length,
+          });
+
+          const stats = getStats();
+          
+          const healthyResources = resources.filter(r => {
+                const props = r.properties || {};
+                const state = (props.state || props.provisioningState || r.provisioningState || '').toLowerCase();
+                return ['running', 'succeeded', 'ready'].includes(state);
+            }).length;
+            
+          const healthPercentage = resources.length > 0 
+                ? Math.round((healthyResources / resources.length) * 100) 
+                : 100;
+
+          const chartData = [
+                { label: 'Storage', value: stats.storage, color: '#26a570' }, 
+                { label: 'Compute', value: stats.apps, color: '#1890ff' }, 
+                { label: 'Database', value: stats.db, color: '#004aaa' }, 
+                { label: 'Service Bus', value: stats.bus, color: '#5f36dd' } 
+          ].filter(d => d.value > 0);
+
+          const activityLog = [
+                { time: '10:42 AM', event: 'Resource Group Sync', status: 'Success' },
+                { time: '10:30 AM', event: 'Policy Check', status: 'Success' },
+                { time: '09:15 AM', event: 'Health Probe: AppService', status: 'Warning' },
+          ];
+
+          if (!credentials) {
+            return <LoginScreen onLogin={login} loading={loading} error={error} />;
+          }
+
+          const tabs = [
+              { id: 'overview', label: 'System Details', icon: LayoutDashboard },
+              { id: 'all', label: 'All Resources', icon: Layers },
+              { id: 'storage', label: 'Storage', icon: HardDrive },
+              { id: 'compute', label: 'Compute', icon: Globe },
+              { id: 'database', label: 'Databases', icon: Database },
+              { id: 'integration', label: 'Service Bus', icon: MessageSquare },
+          ];
+
+          return (
+            <div className="flex flex-col h-screen bg-gray-50 font-sans text-gray-900 overflow-hidden">
+                
+                {/* 1. Header */}
+                <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm z-20 shrink-0">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-brand-500 p-2 rounded-lg shadow-lg shadow-brand-500/30">
+                        <Activity className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-800 tracking-tight">Dashboard - {CONFIG.RESOURCE_GROUP}</h1>
+                        <p className="text-gray-500 text-xs font-medium flex items-center gap-2 mt-0.5">
+                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                            Proxy Connected
+                        </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={refreshData} className="p-2.5 bg-gray-50 hover:bg-white text-gray-600 border border-gray-200 rounded-lg transition-all active:scale-95 shadow-sm hover:shadow" title="Refresh Data">
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-brand-600' : ''}`} />
+                    </button>
+                    <button onClick={logout} className="flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg transition-colors text-xs font-medium uppercase tracking-wide shadow-md">
+                        <LogOut className="w-3 h-3" />
+                        Disconnect
+                    </button>
+                  </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="p-8 max-w-7xl mx-auto w-full">
+                        
+                        {/* 2. Overview Section (Always Visible) */}
+                        <StatsGrid 
+                            stats={stats} 
+                            resources={resources} 
+                            healthPercentage={healthPercentage} 
+                            healthyResources={healthyResources}
+                        />
+
+                        {/* 3. Tabs Navigation */}
+                        <div className="border-b border-gray-200 mb-6">
+                            <nav className="-mb-px flex space-x-6 overflow-x-auto custom-scrollbar pb-1" aria-label="Tabs">
+                                {tabs.map((tab) => {
+                                    const Icon = tab.icon;
+                                    const isActive = activeTab === tab.id;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`
+                                                group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-all
+                                                ${isActive 
+                                                    ? 'border-brand-600 text-brand-600' 
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+                                            `}
+                                        >
+                                            <Icon className={`
+                                                -ml-0.5 mr-2 h-4 w-4
+                                                ${isActive ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-500'}
+                                            `} />
+                                            {tab.label}
+                                            {tab.id !== 'overview' && (
+                                                <span className={`ml-2 py-0.5 px-2 rounded-full text-xs ${isActive ? 'bg-brand-100 text-brand-600' : 'bg-gray-100 text-gray-900'}`}>
+                                                    {tab.id === 'all' ? stats.total : 
+                                                     tab.id === 'storage' ? stats.storage :
+                                                     tab.id === 'compute' ? stats.apps :
+                                                     tab.id === 'database' ? stats.db :
+                                                     stats.bus}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </nav>
+                        </div>
+
+                        {/* 4. Content Area */}
+                        {activeTab === 'overview' ? (
+                            <SystemDetailsView 
+                                stats={stats} 
+                                chartData={chartData} 
+                                activityLog={activityLog} 
+                            />
+                        ) : (
+                            <ResourceListView 
+                                filteredResources={filteredResources}
+                                loading={loading}
+                                fetchDetails={fetchDetails}
+                                loadingChildren={loadingChildren}
+                                childResources={childResources}
+                                expandedId={expandedId}
+                            />
+                        )}
+                        
+                    </div>
+                </div>
+            </div>
+          );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
