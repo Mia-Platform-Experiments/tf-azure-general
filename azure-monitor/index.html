@@ -23,23 +23,23 @@
                         gray: {
                             50: '#f9f9f9',
                             100: '#f2f2f2',
-                            200: '#e5e5e5', // Border default
+                            200: '#e5e5e5',
                             300: '#cdcdcd',
-                            400: '#acacac', // Icons
+                            400: '#acacac',
                             500: '#898989',
-                            600: '#636363', // Secondary text
-                            700: '#464646', // Primary text
+                            600: '#636363',
+                            700: '#464646',
                             800: '#2b2b2b',
-                            900: '#181818', // Backgrounds
+                            900: '#181818',
                         },
                         brand: {
                             50: '#f4f9ff',
-                            100: '#e5f0fc', // Badges
+                            100: '#e5f0fc',
                             200: '#d2e5fc',
                             300: '#aad1fb',
                             400: '#6db2fc',
-                            500: '#1890ff', // Primary Brand / Buttons
-                            600: '#1261e4', // Hover states / Icons
+                            500: '#1890ff',
+                            600: '#1261e4',
                             700: '#004aaa',
                             800: '#002e6e',
                             900: '#001740',
@@ -47,16 +47,16 @@
                         green: {
                             50: '#effce9',
                             100: '#def8d8',
-                            500: '#4cb61b', // Icon
-                            600: '#259100', // Text
-                            700: '#146d05', // Border/Text
+                            500: '#4cb61b',
+                            600: '#259100',
+                            700: '#146d05',
                         },
                         red: {
                             50: '#fff6f6',
                             100: '#ffebeb',
-                            400: '#ff807f', // Text
                             500: '#ff5453',
-                            700: '#a80101', // Border/Text
+                            600: '#e50020',
+                            700: '#a80101',
                         },
                         yellow: {
                             50: '#FFF8D4',
@@ -140,14 +140,12 @@
           TENANT_ID: "7c0fca8e-8492-4f92-8c58-8f0beb87693a",
           SUBSCRIPTION_ID: "633fa2a8-982c-431d-9535-a90d8948b27c",
           RESOURCE_GROUP: "terraform-demo",
-          // UPDATED: Proxy URL now includes /az-proxy
           PROXY_URL: "https://azure-monitor.mia-demo-re5gu6.gcp.mia-platform.eu/az-proxy",
           
           get ENDPOINTS() {
             return {
               TOKEN: `${this.PROXY_URL}/auth/token`,
               MANAGEMENT_BASE: `${this.PROXY_URL}/management`,
-              // Added $expand=provisioningState to ensure we get status in the list view
               GET_RESOURCES: (sub, rg) => 
                 `${this.PROXY_URL}/management/subscriptions/${sub}/resourceGroups/${rg}/resources?api-version=2021-04-01&$expand=provisioningState`,
             };
@@ -181,7 +179,6 @@
                 }
                 return data;
             } else {
-                // If not JSON (likely HTML error page or 404), throw meaningful error
                 throw new Error(`Invalid server response (${response.status}). Expected JSON.`);
             }
         }
@@ -332,7 +329,6 @@
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     {/* Total Resources Card */}
                     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-[0_2px_10px_-4px_rgba(24,144,255,0.15)] relative">
-                        {/* Clip the background icon separately so it doesn't clip tooltips */}
                         <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
                             <div className="absolute right-0 top-0 p-4 opacity-[0.1]">
                                 <Layers className="w-24 h-24 text-gray-900" />
@@ -647,12 +643,10 @@
           // Central error handler for redirects
           const handleApiError = (err) => {
               console.error("API Error:", err);
-              // Only alert if we haven't already shown an error state in login
               if (accessToken) { 
                   alert("Connection to Azure failed or session expired. Redirecting to login.");
                   logout();
               } else {
-                  // If we are in login phase, just throw to be caught by login function
                   throw err;
               }
           };
@@ -670,7 +664,6 @@
                 });
                 return data.access_token;
             } catch (e) {
-                // Let the login function handle this specifically
                 throw e;
             }
           };
@@ -726,6 +719,14 @@
             setActiveTab('overview');
           };
 
+          // Auto-login logic
+          useEffect(() => {
+            const saved = getServicePrincipal();
+            if (saved) {
+              login(saved);
+            }
+          }, []);
+
           const fetchDetails = async (resource) => {
             if (loadingChildren[resource.id] || childResources[resource.id]) {
               setExpandedId(expandedId === resource.id ? null : resource.id);
@@ -759,9 +760,7 @@
               
               setChildResources(prev => ({ ...prev, [resource.id]: data }));
             } catch (err) {
-              // Partial failure on details shouldn't necessarily logout, but warn
               console.error("Error fetching details", err);
-              // handleApiError(err); // Optional: decide if you want strict logout on any error
             } finally {
               setLoadingChildren(prev => ({ ...prev, [resource.id]: false }));
             }
