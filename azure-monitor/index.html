@@ -132,7 +132,8 @@
           CheckCircle2,
           AlertTriangle,
           HelpCircle,
-          LayoutDashboard
+          LayoutDashboard,
+          Search
         } from 'lucide-react';
 
         // --- Configuration ---
@@ -146,6 +147,7 @@
             return {
               TOKEN: `${this.PROXY_URL}/auth/token`,
               MANAGEMENT_BASE: `${this.PROXY_URL}/management`,
+              // Added $expand=provisioningState to ensure we get status in the list view
               GET_RESOURCES: (sub, rg) => 
                 `${this.PROXY_URL}/management/subscriptions/${sub}/resourceGroups/${rg}/resources?api-version=2021-04-01&$expand=provisioningState`,
             };
@@ -329,6 +331,7 @@
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                     {/* Total Resources Card */}
                     <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-[0_2px_10px_-4px_rgba(24,144,255,0.15)] relative">
+                        {/* Clip the background icon separately so it doesn't clip tooltips */}
                         <div className="absolute inset-0 overflow-hidden rounded-xl pointer-events-none">
                             <div className="absolute right-0 top-0 p-4 opacity-[0.1]">
                                 <Layers className="w-24 h-24 text-gray-900" />
@@ -631,7 +634,19 @@
           const [childResources, setChildResources] = useState({}); 
           const [loadingChildren, setLoadingChildren] = useState({});
 
+          // Search State
+          const [searchTerm, setSearchTerm] = useState('');
+          const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
           const [activeTab, setActiveTab] = useState('overview'); 
+
+          // Debounce Effect
+          useEffect(() => {
+            const timer = setTimeout(() => {
+              setDebouncedSearchTerm(searchTerm);
+            }, 300);
+            return () => clearTimeout(timer);
+          }, [searchTerm]);
 
           useEffect(() => {
             const saved = getServicePrincipal();
@@ -716,6 +731,8 @@
             setAccessToken(null);
             setResources([]);
             setChildResources({});
+            setSearchTerm('');
+            setDebouncedSearchTerm('');
             setActiveTab('overview');
           };
 
@@ -766,47 +783,55 @@
             }
           };
 
-          const filteredResources = resources.filter(r => {
-            if (activeTab === 'overview' || activeTab === 'all') return true;
-            if (activeTab === 'storage') return r.type.toLowerCase().includes('storage');
-            if (activeTab === 'compute') return r.type.toLowerCase().includes('web') || r.type.toLowerCase().includes('serverfarms');
-            if (activeTab === 'database') return r.type.toLowerCase().includes('sql');
-            if (activeTab === 'integration') return r.type.toLowerCase().includes('servicebus');
-            return true;
-          });
+          // 1. Calculate Search Results (Base for everything)
+          const resourcesMatchingSearch = useMemo(() => {
+            if (!debouncedSearchTerm) return resources;
+            return resources.filter(r => r.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase()));
+          }, [resources, debouncedSearchTerm]);
 
-          const getStats = () => ({
-              total: resources.length,
-              storage: resources.filter(r => r.type.includes('storage')).length,
-              apps: resources.filter(r => r.type.includes('Web')).length,
-              db: resources.filter(r => r.type.includes('SQL')).length,
-              bus: resources.filter(r => r.type.includes('ServiceBus')).length,
-          });
+          // 2. Derive Stats from Search Results
+          const stats = useMemo(() => ({
+              total: resourcesMatchingSearch.length,
+              storage: resourcesMatchingSearch.filter(r => r.type.includes('storage')).length,
+              apps: resourcesMatchingSearch.filter(r => r.type.includes('Web')).length,
+              db: resourcesMatchingSearch.filter(r => r.type.includes('SQL')).length,
+              bus: resourcesMatchingSearch.filter(r => r.type.includes('ServiceBus')).length,
+          }), [resourcesMatchingSearch]);
 
-          const stats = getStats();
-          
-          const healthyResources = resources.filter(r => {
+          // 3. Derive Health from Search Results
+          const healthyResources = useMemo(() => resourcesMatchingSearch.filter(r => {
                 const props = r.properties || {};
                 const state = (props.state || props.provisioningState || r.provisioningState || '').toLowerCase();
                 return ['running', 'succeeded', 'ready'].includes(state);
-            }).length;
+            }).length, [resourcesMatchingSearch]);
             
-          const healthPercentage = resources.length > 0 
-                ? Math.round((healthyResources / resources.length) * 100) 
+          const healthPercentage = resourcesMatchingSearch.length > 0 
+                ? Math.round((healthyResources / resourcesMatchingSearch.length) * 100) 
                 : 100;
 
-          const chartData = [
+          // 4. Derive Chart Data from Stats
+          const chartData = useMemo(() => [
                 { label: 'Storage', value: stats.storage, color: '#26a570' }, 
                 { label: 'Compute', value: stats.apps, color: '#1890ff' }, 
                 { label: 'Database', value: stats.db, color: '#004aaa' }, 
                 { label: 'Service Bus', value: stats.bus, color: '#5f36dd' } 
-          ].filter(d => d.value > 0);
+          ].filter(d => d.value > 0), [stats]);
 
           const activityLog = [
                 { time: '10:42 AM', event: 'Resource Group Sync', status: 'Success' },
                 { time: '10:30 AM', event: 'Policy Check', status: 'Success' },
                 { time: '09:15 AM', event: 'Health Probe: AppService', status: 'Warning' },
           ];
+
+          // 5. Derive Final List from Search Results + Active Tab
+          const filteredResources = useMemo(() => {
+            if (activeTab === 'overview' || activeTab === 'all') return resourcesMatchingSearch;
+            if (activeTab === 'storage') return resourcesMatchingSearch.filter(r => r.type.toLowerCase().includes('storage'));
+            if (activeTab === 'compute') return resourcesMatchingSearch.filter(r => r.type.toLowerCase().includes('web') || r.type.toLowerCase().includes('serverfarms'));
+            if (activeTab === 'database') return resourcesMatchingSearch.filter(r => r.type.toLowerCase().includes('sql'));
+            if (activeTab === 'integration') return resourcesMatchingSearch.filter(r => r.type.toLowerCase().includes('servicebus'));
+            return resourcesMatchingSearch;
+          }, [activeTab, resourcesMatchingSearch]);
 
           if (!credentials) {
             return <LoginScreen onLogin={login} loading={loading} error={error} />;
@@ -838,7 +863,20 @@
                         </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  
+                  {/* Search and Actions */}
+                  <div className="flex items-center gap-4">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input 
+                            type="text" 
+                            placeholder="Filter resources..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent w-64 transition-all"
+                        />
+                    </div>
+                    <div className="h-6 w-px bg-gray-200 mx-1"></div>
                     <button onClick={refreshData} className="p-2.5 bg-gray-50 hover:bg-white text-gray-600 border border-gray-200 rounded-lg transition-all active:scale-95 shadow-sm hover:shadow" title="Refresh Data">
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-brand-600' : ''}`} />
                     </button>
