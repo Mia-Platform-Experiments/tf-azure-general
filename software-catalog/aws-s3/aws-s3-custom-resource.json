@@ -1,0 +1,115 @@
+{
+  "generator": {
+    "configurationBaseFolder": "terraform",
+    "templates": [
+      {
+        "name": "variables",
+        "fileExtension": "tf",
+        "folderName": "s3-bucket",
+        "template": "variable \"_module_source\" {\n  default = \"git::https://github.com/Mia-Platform-Experiments/tf-aws-s3.git\"\n}\n\nvariable \"service_name\" {\n  description = \"The name of the service (e.g., payment-service-data). Used for S3 bucket naming. Must be 3-63 lowercase alphanumeric characters and hyphens. Note: S3 bucket names must be globally unique across all AWS accounts.\"\n  type        = string\n  default     = \"%spec.service_name%\"\n\n  validation {\n    condition     = can(regex(\"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$\", var.service_name))\n    error_message = \"Service name must be 3-63 characters, lowercase alphanumeric and hyphens only, cannot start or end with a hyphen.\"\n  }\n}\n\nvariable \"aws_region\" {\n  description = \"The AWS region to deploy the S3 bucket.\"\n  type        = string\n  default     = \"%spec.aws_region%\"\n}\n\nvariable \"performance_profile\" {\n  description = \"The performance tier selected by the developer (sandbox, development, production). Versioning and lifecycle rules are automatically configured based on this profile.\"\n  type        = string\n  default     = \"%spec.performance_profile%\"\n\n  validation {\n    condition     = contains([\"sandbox\", \"development\", \"production\"], var.performance_profile)\n    error_message = \"Performance profile must be one of: sandbox, development, production.\"\n  }\n}\n\nvariable \"additional_tags\" {\n  description = \"Additional tags to apply to the S3 bucket (optional).\"\n  type        = map(string)\n  default     = %spec.additional_tags%\n}"
+      }
+    ],
+    "type": "template"
+  },
+  "meta": {
+    "apiVersion": "custom-generator.console.mia-platform.eu/v1",
+    "kind": "AWSS3BucketTemplateGenerator"
+  },
+  "name": "my-aws-s3-bucket",
+  "jsonSchema": {
+    "type": "object",
+    "required": [
+      "service_name",
+      "aws_region",
+      "performance_profile"
+    ],
+    "properties": {
+      "service_name": {
+        "type": "string",
+        "description": "The name of the service (e.g., payment-service-data). Used for S3 bucket naming. Must be 3-63 lowercase alphanumeric characters and hyphens. Note: S3 bucket names must be globally unique across all AWS accounts - consider appending environment or random suffix.",
+        "pattern": "^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$",
+        "examples": [
+          "payment-service-storage",
+          "user-uploads-bucket",
+          "app-data-dev"
+        ]
+      },
+      "aws_region": {
+        "type": "string",
+        "description": "The AWS region to deploy the S3 bucket.",
+        "default": "us-east-1",
+        "enum": [
+          "us-east-1",
+          "us-east-2",
+          "us-west-1",
+          "us-west-2",
+          "eu-west-1",
+          "eu-west-2",
+          "eu-central-1",
+          "eu-north-1",
+          "ap-southeast-1",
+          "ap-southeast-2",
+          "ap-northeast-1",
+          "ap-south-1",
+          "ca-central-1",
+          "sa-east-1"
+        ]
+      },
+      "performance_profile": {
+        "type": "string",
+        "description": "The performance tier selected by the developer (sandbox, development, production). Versioning and lifecycle rules are automatically configured based on this profile.",
+        "default": "sandbox",
+        "enum": [
+          "sandbox",
+          "development",
+          "production"
+        ]
+      },
+      "additional_tags": {
+        "type": "object",
+        "description": "Additional tags to apply to the S3 bucket (optional).",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {},
+        "examples": [
+          {
+            "team": "backend",
+            "cost_center": "engineering"
+          },
+          {
+            "environment": "production",
+            "compliance": "required"
+          }
+        ]
+      }
+    }
+  },
+  "spec": {
+    "variables": [
+      {
+        "name": "service_name",
+        "description": "The name of the service. Used for S3 bucket naming.",
+        "type": "string"
+      },
+      {
+        "name": "aws_region",
+        "description": "The AWS region to deploy the S3 bucket.",
+        "type": "string",
+        "default": "us-east-1"
+      },
+      {
+        "name": "performance_profile",
+        "description": "The performance tier selected by the developer (sandbox, development, production).",
+        "type": "string",
+        "default": "sandbox"
+      },
+      {
+        "name": "additional_tags",
+        "description": "Additional tags to apply to the S3 bucket.",
+        "type": "object",
+        "default": {}
+      }
+    ]
+  }
+}
